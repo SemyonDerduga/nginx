@@ -17,6 +17,7 @@ typedef struct {
 
 typedef struct {
     ngx_uint_t                            two;
+    ngx_uint_t                            unit_weights;
 #if (NGX_HTTP_UPSTREAM_ZONE)
     ngx_uint_t                            config;
 #endif
@@ -145,11 +146,16 @@ ngx_http_upstream_update_random(ngx_pool_t *pool,
     }
 
     total_weight = 0;
+    rcf->unit_weights = 1;
 
     for (peer = peers->peer, i = 0; peer; peer = peer->next, i++) {
         ranges[i].peer = peer;
         ranges[i].range = total_weight;
         total_weight += peer->weight;
+
+        if (peer->weight != 1) {
+            rcf->unit_weights = 0;
+        }
     }
 
     rcf->ranges = ranges;
@@ -476,6 +482,10 @@ ngx_http_upstream_peek_random_peer(ngx_http_upstream_rr_peers_t *peers,
     ngx_uint_t  i, j, k, x;
 
     x = ngx_random() % peers->total_weight;
+
+    if (rp->conf->unit_weights) {
+        return x;
+    }
 
     i = 0;
     j = peers->number;
