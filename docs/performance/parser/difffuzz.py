@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Differential fuzz of HTTP/1 header parsing: base vs candidate nginx.
 
-Each case sends the same request (random header values, random TCP split
-points) through both binaries proxying to an echo backend. The backend
-returns the raw request it got plus a random response header, so both
-request-header and upstream-response-header parsing are compared.
+Each case sends the same request (random URI and query string, random
+header values, random TCP split points) through both binaries proxying to
+an echo backend. The backend returns the raw request it got plus a random
+response header, so request-line, request-header and upstream-response-
+header parsing are compared. Both binaries also write the same variables
+to access logs with default and JSON escaping; the logs must match.
 """
 import os, random, socket, subprocess, sys, tempfile, threading, time
 from pathlib import Path
@@ -66,7 +68,10 @@ def launch(binary, d):
     conf = d / "nginx.conf"
     conf.write_text(f"""daemon off; master_process off; error_log stderr crit;
 pid nginx.pid; events {{ worker_connections 512; }}
-http {{ access_log off; client_header_buffer_size 64;
+http {{ client_header_buffer_size 64;
+log_format plain '$request|$args|$http_user_agent|$http_cookie|$http_x_a|$upstream_http_x_r';
+log_format json escape=json '$request|$args|$http_user_agent|$http_cookie|$http_x_a|$upstream_http_x_r';
+access_log logs/plain.log plain; access_log logs/json.log json;
 large_client_header_buffers 4 16k; proxy_buffer_size 4k;
 upstream b {{ server 127.0.0.1:{BP}; }}
 server {{ listen 127.0.0.1:{p}; location / {{ proxy_pass http://b; }} }} }}""")
@@ -105,6 +110,22 @@ def value():
     return bytes(out[:n]) if mode >= 0.7 else bytes(out)
 
 
+def uri():
+    u = b"/" + rnd.choice([b"", b"p", b"api/v1/items", b"a/./b", b"a//b", b"%41x"])
+    if rnd.random() < 0.8:
+        if rnd.random() < 0.7:     # mostly well-formed query strings
+            n = rnd.choice([5, 15, 16, 17, 31, 32, 33, 64, 200, rnd.randrange(0, 900)])
+            q = bytes(rnd.choice(b"abcXYZ019=&_-.%/+?:@~") if rnd.random() > 0.02
+                      else rnd.choice(b"\x7f\x80\xff#\x01\t\"\\")
+                      for _ in range(n))
+        else:
+            q = value().replace(b" ", b"+").replace(b"\r", b"").replace(b"\n", b"")
+        u += b"?" + q
+        if rnd.random() < 0.1:
+            u += rnd.choice([b"#frag", b"\x7f", b"\x01", b" ", b"\t"]) + value()[:20]
+    return u
+
+
 def build_request():
     hdrs = [b"Host: x"]
     for _ in range(rnd.randrange(0, 6)):
@@ -116,7 +137,7 @@ def build_request():
         want += rnd.choice([b"\r", b"\n", b"\0"]) + value()
     hdrs.append(b"X-Want: " + want.hex().encode())
     eol = rnd.choice([b"\r\n", b"\r\n", b"\n"])
-    return b"GET /p HTTP/1.1" + eol + eol.join(hdrs) + eol + b"Connection: close" + eol + eol
+    return b"GET " + uri() + b" HTTP/1.1" + eol + eol.join(hdrs) + eol + b"Connection: close" + eol + eol
 
 
 def splits(req):
@@ -129,10 +150,13 @@ def send(port, parts):
     s = socket.create_connection(("127.0.0.1", port), timeout=5)
     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     try:
-        for i, part in enumerate(parts):
-            s.sendall(part)
-            if i + 1 < len(parts):
-                time.sleep(0.002)
+        try:
+            for i, part in enumerate(parts):
+                s.sendall(part)
+                if i + 1 < len(parts):
+                    time.sleep(0.002)
+        except BrokenPipeError:
+            pass               # nginx rejected early; read what it sent
         data = b""
         while True:
             chunk = s.recv(65536)
@@ -170,5 +194,16 @@ with tempfile.TemporaryDirectory() as td:
         for p, _ in procs:
             p.terminate()
             p.wait()
+    for log in ("plain.log", "json.log"):
+        la = (td / "base" / "logs" / log).read_bytes()
+        lb = (td / "cand" / "logs" / log).read_bytes()
+        same = la == lb
+        print(f"{log}: {la.count(b'\n')} lines, {'identical' if same else 'DIFFERENT'}")
+        if not same:
+            bad += 1
+            for x, y in zip(la.split(b"\n"), lb.split(b"\n")):
+                if x != y:
+                    print(" A:", x[:200], "\n B:", y[:200])
+                    break
     print(f"cases={cases} mismatches={bad} statuses={statuses}")
     sys.exit(1 if bad else 0)
