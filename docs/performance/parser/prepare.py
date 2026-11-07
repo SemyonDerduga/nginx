@@ -17,4 +17,15 @@ for source, dest in [(args.baseline, "reference.inc"), (args.candidate, "candida
     text = blob.decode()
     start = text.index("ngx_int_t\nngx_http_parse_header_line(")
     end = text.index("\n\n\nngx_int_t\nngx_http_parse_uri(", start)
-    (where / dest).write_text(text[start:end] + "\n")
+    body = text[start:end]
+    prefix = ""
+    helper = "#if (NGX_HTTP_PARSE_SIMD)\n\n/*\n * returns"
+    if helper in body:
+        # the SIMD helper sits between the parser and ngx_http_parse_uri();
+        # emit the feature block and the helper before the parser
+        h = body.index(helper)
+        body, helper_src = body[:h].rstrip() + "\n", body[h:]
+        ps = text.index("#if (defined(__GNUC__) || defined(__clang__))")
+        pe = text.index("#if (NGX_HTTP_PARSE_SIMD)\nstatic ngx_inline", ps)
+        prefix = text[ps:pe] + helper_src + "\n\n"
+    (where / dest).write_text(prefix + body + "\n")

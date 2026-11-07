@@ -9,11 +9,23 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-#if defined(__SSE2__) && (defined(__GNUC__) || defined(__clang__))
+#if (defined(__GNUC__) || defined(__clang__))
+
+#if defined(__SSE2__)
 #include <emmintrin.h>
+#define NGX_HTTP_PARSE_SIMD  1
+
+#elif defined(__aarch64__) && defined(__ARM_NEON)
+#include <arm_neon.h>
+#define NGX_HTTP_PARSE_SIMD  1
+#endif
+
 #endif
 
 
+#if (NGX_HTTP_PARSE_SIMD)
+static ngx_inline ngx_uint_t ngx_http_parse_ctl_offset(u_char *p);
+#endif
 static ngx_table_elt_t *ngx_http_parse_multi_header_lines_internal(
     ngx_http_request_t *r, ngx_table_elt_t *headers, ngx_str_t *name,
     ngx_str_t *value, u_char sep);
@@ -877,6 +889,9 @@ ngx_http_parse_header_line(ngx_http_request_t *r, ngx_buf_t *b,
 {
     u_char      c, ch, *p;
     ngx_uint_t  hash, i;
+#if (NGX_HTTP_PARSE_SIMD)
+    ngx_uint_t  n;
+#endif
     enum {
         sw_start = 0,
         sw_name,
@@ -1053,19 +1068,16 @@ ngx_http_parse_header_line(ngx_http_request_t *r, ngx_buf_t *b,
 
         /* header value */
         case sw_value:
-#if defined(__SSE2__) && (defined(__GNUC__) || defined(__clang__))
+#if (NGX_HTTP_PARSE_SIMD)
             if (ch > ' ' && b->last - p >= 16) {
-                __m128i value = _mm_loadu_si128((const __m128i *) p);
-                __m128i small = _mm_min_epu8(value, _mm_set1_epi8(' '));
-                unsigned int mask = _mm_movemask_epi8(
-                                        _mm_cmpeq_epi8(value, small));
+                n = ngx_http_parse_ctl_offset(p);
 
-                if (mask == 0) {
+                if (n == 16) {
                     p += 15;
                     break;
                 }
 
-                p += __builtin_ctz(mask);
+                p += n;
                 ch = *p;
             }
 #endif
@@ -1163,6 +1175,43 @@ header_done:
 
     return NGX_HTTP_PARSE_HEADER_DONE;
 }
+
+
+#if (NGX_HTTP_PARSE_SIMD)
+
+/*
+ * returns the offset of the first byte <= 0x20 among the 16 bytes at p,
+ * or 16 if there is none
+ */
+
+static ngx_inline ngx_uint_t
+ngx_http_parse_ctl_offset(u_char *p)
+{
+#if defined(__SSE2__)
+    __m128i       value, small;
+    unsigned int  mask;
+
+    value = _mm_loadu_si128((const __m128i *) p);
+    small = _mm_min_epu8(value, _mm_set1_epi8(' '));
+    mask = _mm_movemask_epi8(_mm_cmpeq_epi8(value, small));
+
+    return mask ? (ngx_uint_t) __builtin_ctz(mask) : 16;
+
+#else
+    uint8x16_t  ctl;
+    uint64_t    mask;
+
+    ctl = vcleq_u8(vld1q_u8(p), vdupq_n_u8(' '));
+
+    /* narrow 16 byte flags into 16 nibbles of a 64-bit mask */
+    mask = vget_lane_u64(vreinterpret_u64_u8(
+                             vshrn_n_u16(vreinterpretq_u16_u8(ctl), 4)), 0);
+
+    return mask ? (ngx_uint_t) __builtin_ctzll(mask) >> 2 : 16;
+#endif
+}
+
+#endif
 
 
 ngx_int_t

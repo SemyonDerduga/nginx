@@ -1,5 +1,8 @@
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -21,6 +24,7 @@
 typedef unsigned char u_char;
 typedef long ngx_int_t;
 typedef unsigned long ngx_uint_t;
+#define ngx_inline inline
 #define ngx_hash(key,c) ((key)*31+(c))
 #define ngx_strncmp(a,b,n) strncmp((const char *)(a),(const char *)(b),(n))
 #define CR '\r'
