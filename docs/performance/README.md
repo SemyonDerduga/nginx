@@ -37,6 +37,38 @@ bash docs/performance/check.sh ../nginx-tests "$PWD/objs/nginx"
 
 На объединённой сборке выполнено 283 проверки из 12 официальных файлов: 280 прошли, три дали ожидаемый для этой версии результат TODO. Неожиданных отказов и пропусков нет. Отдельный корпус парсера прошёл 213 420 сравнительных случаев, включая 29 580 случаев с защищённой страницей после буфера.
 
+## Нагрузочный стенд и данные
+
+Из корня форка после сборки создайте новый каталог для результатов, скомпилируйте оба клиента и запустите парные измерения. Укажите свободные CPU и используйте машину без конкурирующей нагрузки. Архивные проценты относятся к сборке с одним патчем парсера `2dbc6a0af4edc36597fa54274837bebd3e7939ed`; команды ниже проверяют текущую ветку с двумя патчами. В наборе нагрузок используется один upstream с обычным round robin, поэтому режим random в этом тесте не задействован.
+
+```sh
+LAB=docs/performance
+BASE=$(realpath ../nginx-base/objs/nginx)
+CANDIDATE=$(realpath objs/nginx)
+mkdir -p rerun
+cc -O2 -pthread "$LAB/throughput/load.c" -o "$LAB/throughput/load"
+cc -O2 "$LAB/latency/rate.c" -o "$LAB/latency/rate"
+python3 "$LAB/throughput/run.py" "$BASE" "$CANDIDATE" --output rerun/e2e.csv
+python3 "$LAB/throughput/run.py" "$BASE" "$BASE" --ctrl --rounds 4 --seconds 1 --output rerun/aa.csv
+python3 "$LAB/throughput/summarize.py" rerun/e2e.csv
+python3 "$LAB/latency/run.py" "$BASE" "$CANDIDATE" --out rerun/latency
+python3 "$LAB/latency/summary.py" rerun/latency/fixed.csv
+```
+
+Исходные агрегаты по каждому запуску: [A/B](throughput/results/e2e.csv), [A/A](throughput/results/aa.csv), [фиксированная нагрузка](latency/results/fixed.csv). Клиенты проверяют статус, длину и тело ответа. При фиксированной нагрузке сохраняются отдельные времена запланированной отправки, фактической отправки и завершения запроса.
+
+## Дополнительные проверки
+
+```sh
+python3 docs/performance/parser/prepare.py ../nginx-base .
+cc -O2 -Wall -Wextra docs/performance/parser/compare.c -o rerun/parser-check
+rerun/parser-check
+python3 docs/performance/upstream/check_random.py ../nginx-base .
+python3 docs/performance/upstream/check_pool.py "$CANDIDATE"
+```
+
+В быстром автономном тесте парсера используются минимальные структуры стенда. Для сборки проверки с реальными типами добавьте `-DUSE_NGINX_HEADERS`, `-Iobjs` и include-пути NGINX из `objs/Makefile`. Проверка random извлекает функции выбора из обоих исходных деревьев; проверка keepalive обращается к реальным серверным процессам. [Наблюдаемые соединения](upstream/observed.json).
+
 ## Гипотезы для следующих экспериментов
 
 В `ngx_http_proxy_create_request` повторяется поиск исключений по заголовкам при расчёте длины и сериализации. В TLS можно исследовать пропуск копии полного буфера при сохранении семантики повторной записи. У файлового кеша стоит измерить конкуренцию за mutex при росте числа workers. Для этих трёх гипотез сквозной выигрыш ещё предстоит измерить.
