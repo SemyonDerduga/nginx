@@ -1,0 +1,20 @@
+
+## proxy, typical browser headers
+base                         cpu/req  20.95 us   rps    44357
+base A/A                     cpu/req  21.94 us   rps    43068   cpu Δ  +3.0% [-20.1,+21.5]   rps Δ  -1.8%
+neon patch                   cpu/req  20.99 us   rps    44034   cpu Δ  -3.2% [-21.9,+20.7]   rps Δ  +4.7%
+base + log buffer=64k        cpu/req  16.54 us   rps    55823   cpu Δ -20.5% [-39.0,-1.8]   rps Δ +23.3%
+
+## proxy, 2 KiB cookie
+base                         cpu/req  28.07 us   rps    32595
+base A/A                     cpu/req  29.03 us   rps    30972   cpu Δ  +3.7% [-0.3,+9.2]   rps Δ  -2.0%
+neon patch                   cpu/req  25.61 us   rps    34066   cpu Δ  -5.7% [-12.1,+2.3]   rps Δ  +4.6%
+base + log buffer=64k        cpu/req  22.08 us   rps    41252   cpu Δ -22.3% [-27.6,-12.3]   rps Δ +30.9%
+
+## direct return, 2 KiB cookie
+base                         cpu/req  16.80 us   rps    53843
+base A/A                     cpu/req  16.38 us   rps    55564   cpu Δ  -2.5% [-14.2,+18.1]   rps Δ  +3.3%
+neon patch                   cpu/req  13.32 us   rps    67748   cpu Δ -16.2% [-32.6,-10.2]   rps Δ +18.5%
+base + log buffer=64k        cpu/req  10.84 us   rps    81668   cpu Δ -37.8% [-45.4,-24.4]   rps Δ +59.9%
+
+[exited with code 0]
