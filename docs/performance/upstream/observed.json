@@ -1,0 +1,63 @@
+{
+  "binary": "nginx version: nginx/1.31.8",
+  "warmup_rounds": 2,
+  "measured_rounds": 8,
+  "cases": [
+    {
+      "peers": 1,
+      "keepalive": "default",
+      "measured": 8,
+      "new_connections": 0,
+      "reused": 8,
+      "unique_connection_ids": 1
+    },
+    {
+      "peers": 8,
+      "keepalive": "default",
+      "measured": 64,
+      "new_connections": 0,
+      "reused": 64,
+      "unique_connection_ids": 8
+    },
+    {
+      "peers": 32,
+      "keepalive": "default",
+      "measured": 256,
+      "new_connections": 0,
+      "reused": 256,
+      "unique_connection_ids": 32
+    },
+    {
+      "peers": 33,
+      "keepalive": "default",
+      "measured": 264,
+      "new_connections": 264,
+      "reused": 0,
+      "unique_connection_ids": 264
+    },
+    {
+      "peers": 33,
+      "keepalive": 64,
+      "measured": 264,
+      "new_connections": 0,
+      "reused": 264,
+      "unique_connection_ids": 33
+    },
+    {
+      "peers": 64,
+      "keepalive": "default",
+      "measured": 512,
+      "new_connections": 512,
+      "reused": 0,
+      "unique_connection_ids": 512
+    },
+    {
+      "peers": 64,
+      "keepalive": 64,
+      "measured": 512,
+      "new_connections": 0,
+      "reused": 512,
+      "unique_connection_ids": 64
+    }
+  ]
+}
