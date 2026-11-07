@@ -24,9 +24,9 @@ prefix=r'''
 #include <assert.h>
 #include <stdio.h>
 typedef uintptr_t ngx_uint_t;
-typedef struct {ngx_uint_t number,total_weight;} ngx_http_upstream_rr_peers_t;
+typedef struct {ngx_uint_t number,total_weight; unsigned weighted:1;} ngx_http_upstream_rr_peers_t;
 typedef struct {ngx_uint_t range;} range_t;
-typedef struct {range_t ranges[1024]; int unit_weights;} conf_t;
+typedef struct {range_t ranges[1024];} conf_t;
 typedef struct {conf_t *conf;} ngx_http_upstream_random_peer_data_t;
 static ngx_uint_t random_input;
 static uint64_t comparisons, outputs;
@@ -34,15 +34,15 @@ static uint64_t comparisons, outputs;
 '''
 main=r'''
 static void check(unsigned n,unsigned mode,int exhaustive) {
-    conf_t conf = {.unit_weights=1}; ngx_http_upstream_rr_peers_t peers={n,0};
+    static conf_t conf; ngx_http_upstream_rr_peers_t peers={n,0,0};
     ngx_http_upstream_random_peer_data_t rp={&conf};
     for (unsigned j=0; j<n; j++){
         unsigned w=exhaustive ? 1+mode%3 : 1;
         if(exhaustive)mode/=3;
-        if(w!=1)conf.unit_weights=0;
         conf.ranges[j].range=peers.total_weight;
         peers.total_weight+=w;
     }
+    peers.weighted=(peers.total_weight!=peers.number);
     uint64_t orig=0,prop=0;
     for(random_input=0;random_input<peers.total_weight;random_input++) {
         comparisons=0;
