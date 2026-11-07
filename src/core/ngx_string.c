@@ -7,6 +7,7 @@
 
 #include <ngx_config.h>
 #include <ngx_core.h>
+#include <ngx_simd.h>
 
 
 static u_char *ngx_sprintf_num(u_char *buf, u_char *last, uint64_t ui64,
@@ -1909,6 +1910,28 @@ ngx_escape_json(u_char *dst, u_char *src, size_t size)
 
     if (dst == NULL) {
         len = 0;
+
+#if (NGX_HAVE_SIMD)
+
+        /* skip 16-byte blocks without control characters, '"' and '\\' */
+
+        while (size >= NGX_SIMD_WIDTH) {
+            ngx_simd_t  v, m;
+
+            v = ngx_simd_load(src);
+            m = ngx_simd_or(ngx_simd_le(v, ngx_simd_set1(0x1f)),
+                            ngx_simd_or(ngx_simd_eq(v, ngx_simd_set1('"')),
+                                        ngx_simd_eq(v, ngx_simd_set1('\\'))));
+
+            if (ngx_simd_first(m) != NGX_SIMD_WIDTH) {
+                break;
+            }
+
+            src += NGX_SIMD_WIDTH;
+            size -= NGX_SIMD_WIDTH;
+        }
+
+#endif
 
         while (size) {
             ch = *src++;

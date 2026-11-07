@@ -8,6 +8,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
+#include <ngx_simd.h>
 
 #if (NGX_ZLIB)
 #include <zlib.h>
@@ -1102,6 +1103,29 @@ ngx_http_log_escape(u_char *dst, u_char *src, size_t size)
         /* find the number of the characters to be escaped */
 
         n = 0;
+
+#if (NGX_HAVE_SIMD)
+
+        /* skip 16-byte blocks without control, DEL, 8-bit, '"' and '\\' */
+
+        while (size >= NGX_SIMD_WIDTH) {
+            ngx_simd_t  v, m;
+
+            v = ngx_simd_load(src);
+            m = ngx_simd_or(ngx_simd_or(ngx_simd_le(v, ngx_simd_set1(0x1f)),
+                                        ngx_simd_ge(v, ngx_simd_set1(0x7f))),
+                            ngx_simd_or(ngx_simd_eq(v, ngx_simd_set1('"')),
+                                        ngx_simd_eq(v, ngx_simd_set1('\\'))));
+
+            if (ngx_simd_first(m) != NGX_SIMD_WIDTH) {
+                break;
+            }
+
+            src += NGX_SIMD_WIDTH;
+            size -= NGX_SIMD_WIDTH;
+        }
+
+#endif
 
         while (size) {
             if (escape[*src >> 5] & (1U << (*src & 0x1f))) {
