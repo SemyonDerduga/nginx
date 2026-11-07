@@ -1,3 +1,18 @@
+# NGINX 1.31.8 · HTTP performance experiments
+
+Два независимых патча к [NGINX Open Source 1.31.8](https://github.com/nginx/nginx/commit/140aa942711868a8daeb95810bc9a81f272ada72).
+
+| Изменение | Проверенный результат |
+| --- | --- |
+| [HTTP/1: SSE2-сканирование значений заголовков](src/http/ngx_http_parse.c) | На Linux x86-64 с синтетической Cookie в 2 КиБ медианный парный прирост составил **+15,9% RPS** при прямом ответе и **+12,0%** через локальный HTTP-прокси. На коротких и смешанных заголовках устойчивого выигрыша не наблюдалось. |
+| [Upstream: быстрый выбор для `random` и `random two`](src/http/modules/ngx_http_upstream_random_module.c) | При единичных весах случайное число сразу задаёт индекс. Для 256 таких серверов исключены восемь сравнений за выборку. Все 147 624 результата проверки совпали с исходным кодом. Сквозной RPS для этого изменения не измерялся. |
+
+Обе правки вместе собраны GCC 14.2.0 и проверены на 12 файлах официального nginx-tests: 280 успешных проверок, три ожидаемых TODO, неожиданных отказов нет. Снижение p99 на стенде не подтверждено.
+
+[Методика, ограничения и воспроизведение](docs/performance/README.md) · [Все изменения относительно релиза](https://github.com/SemyonDerduga/nginx/compare/140aa942711868a8daeb95810bc9a81f272ada72...perf%2F1.31.8)
+
+---
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/9335b488-ffcc-4157-8364-2370a0b70ad0">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/3a7eeb08-1133-47f5-859c-fad4f5a6a013">
