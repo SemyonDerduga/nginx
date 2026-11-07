@@ -9,6 +9,10 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
+#if defined(__SSE2__) && (defined(__GNUC__) || defined(__clang__))
+#include <emmintrin.h>
+#endif
+
 
 static ngx_table_elt_t *ngx_http_parse_multi_header_lines_internal(
     ngx_http_request_t *r, ngx_table_elt_t *headers, ngx_str_t *name,
@@ -1049,6 +1053,22 @@ ngx_http_parse_header_line(ngx_http_request_t *r, ngx_buf_t *b,
 
         /* header value */
         case sw_value:
+#if defined(__SSE2__) && (defined(__GNUC__) || defined(__clang__))
+            if (ch > ' ' && b->last - p >= 16) {
+                __m128i value = _mm_loadu_si128((const __m128i *) p);
+                __m128i small = _mm_min_epu8(value, _mm_set1_epi8(' '));
+                unsigned int mask = _mm_movemask_epi8(
+                                        _mm_cmpeq_epi8(value, small));
+
+                if (mask == 0) {
+                    p += 15;
+                    break;
+                }
+
+                p += __builtin_ctz(mask);
+                ch = *p;
+            }
+#endif
             switch (ch) {
             case ' ':
                 r->header_end = p;
