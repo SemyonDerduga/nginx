@@ -8,23 +8,12 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
-
-#if (defined(__GNUC__) || defined(__clang__))
-
-#if defined(__SSE2__)
-#include <emmintrin.h>
-#define NGX_HTTP_PARSE_SIMD  1
-
-#elif defined(__aarch64__) && defined(__ARM_NEON)
-#include <arm_neon.h>
-#define NGX_HTTP_PARSE_SIMD  1
-#endif
-
-#endif
+#include <ngx_simd.h>
 
 
-#if (NGX_HTTP_PARSE_SIMD)
+#if (NGX_HAVE_SIMD)
 static ngx_inline ngx_uint_t ngx_http_parse_ctl_offset(u_char *p);
+static ngx_inline ngx_uint_t ngx_http_parse_args_offset(u_char *p);
 #endif
 static ngx_table_elt_t *ngx_http_parse_multi_header_lines_internal(
     ngx_http_request_t *r, ngx_table_elt_t *headers, ngx_str_t *name,
@@ -123,7 +112,10 @@ static uint32_t  usual[] = {
 ngx_int_t
 ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
 {
-    u_char  c, ch, *p, *m;
+    u_char      c, ch, *p, *m;
+#if (NGX_HAVE_SIMD)
+    ngx_uint_t  n;
+#endif
     enum {
         sw_start = 0,
         sw_method,
@@ -662,6 +654,20 @@ ngx_http_parse_request_line(ngx_http_request_t *r, ngx_buf_t *b)
         /* URI */
         case sw_uri:
 
+#if (NGX_HAVE_SIMD)
+            if (b->last - p >= NGX_SIMD_WIDTH) {
+                n = ngx_http_parse_args_offset(p);
+
+                if (n == NGX_SIMD_WIDTH) {
+                    p += NGX_SIMD_WIDTH - 1;
+                    break;
+                }
+
+                p += n;
+                ch = *p;
+            }
+#endif
+
             if (usual[ch >> 5] & (1U << (ch & 0x1f))) {
                 break;
             }
@@ -889,7 +895,7 @@ ngx_http_parse_header_line(ngx_http_request_t *r, ngx_buf_t *b,
 {
     u_char      c, ch, *p;
     ngx_uint_t  hash, i;
-#if (NGX_HTTP_PARSE_SIMD)
+#if (NGX_HAVE_SIMD)
     ngx_uint_t  n;
 #endif
     enum {
@@ -1068,12 +1074,12 @@ ngx_http_parse_header_line(ngx_http_request_t *r, ngx_buf_t *b,
 
         /* header value */
         case sw_value:
-#if (NGX_HTTP_PARSE_SIMD)
-            if (ch > ' ' && b->last - p >= 16) {
+#if (NGX_HAVE_SIMD)
+            if (ch > ' ' && b->last - p >= NGX_SIMD_WIDTH) {
                 n = ngx_http_parse_ctl_offset(p);
 
-                if (n == 16) {
-                    p += 15;
+                if (n == NGX_SIMD_WIDTH) {
+                    p += NGX_SIMD_WIDTH - 1;
                     break;
                 }
 
@@ -1177,38 +1183,40 @@ header_done:
 }
 
 
-#if (NGX_HTTP_PARSE_SIMD)
+#if (NGX_HAVE_SIMD)
 
 /*
- * returns the offset of the first byte <= 0x20 among the 16 bytes at p,
- * or 16 if there is none
+ * returns the offset of the first byte <= 0x20 among the NGX_SIMD_WIDTH
+ * bytes at p, or NGX_SIMD_WIDTH if there is none
  */
 
 static ngx_inline ngx_uint_t
 ngx_http_parse_ctl_offset(u_char *p)
 {
-#if defined(__SSE2__)
-    __m128i       value, small;
-    unsigned int  mask;
+    ngx_simd_t  v;
 
-    value = _mm_loadu_si128((const __m128i *) p);
-    small = _mm_min_epu8(value, _mm_set1_epi8(' '));
-    mask = _mm_movemask_epi8(_mm_cmpeq_epi8(value, small));
+    v = ngx_simd_load(p);
 
-    return mask ? (ngx_uint_t) __builtin_ctz(mask) : 16;
+    return ngx_simd_first(ngx_simd_le(v, ngx_simd_set1(' ')));
+}
 
-#else
-    uint8x16_t  ctl;
-    uint64_t    mask;
 
-    ctl = vcleq_u8(vld1q_u8(p), vdupq_n_u8(' '));
+/*
+ * the same for the rest of a request line URI, where also DEL and "#"
+ * need the state machine
+ */
 
-    /* narrow 16 byte flags into 16 nibbles of a 64-bit mask */
-    mask = vget_lane_u64(vreinterpret_u64_u8(
-                             vshrn_n_u16(vreinterpretq_u16_u8(ctl), 4)), 0);
+static ngx_inline ngx_uint_t
+ngx_http_parse_args_offset(u_char *p)
+{
+    ngx_simd_t  v;
 
-    return mask ? (ngx_uint_t) __builtin_ctzll(mask) >> 2 : 16;
-#endif
+    v = ngx_simd_load(p);
+
+    return ngx_simd_first(ngx_simd_or(ngx_simd_le(v, ngx_simd_set1(' ')),
+                                      ngx_simd_or(
+                                          ngx_simd_eq(v, ngx_simd_set1(0x7f)),
+                                          ngx_simd_eq(v, ngx_simd_set1('#')))));
 }
 
 #endif
