@@ -1,0 +1,54 @@
+{
+ "origin": "$WORK/objs/b-O2/nginx",
+ "rounds": 8,
+ "seconds": 4,
+ "variants": [
+  {
+   "name": "base default (-O)",
+   "binary": "$WORK/objs/b-dflt/nginx",
+   "http": "log_format main '$remote_addr - $remote_user [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\"'; access_log logs/a.log main buffer=64k flush=1s;"
+  },
+  {
+   "name": "base -O2",
+   "binary": "$WORK/objs/b-O2/nginx",
+   "http": "log_format main '$remote_addr - $remote_user [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\"'; access_log logs/a.log main buffer=64k flush=1s;"
+  },
+  {
+   "name": "candidate default (-O2+SIMD)",
+   "binary": "$WORK/objs/c-dflt/nginx",
+   "http": "log_format main '$remote_addr - $remote_user [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\"'; access_log logs/a.log main buffer=64k flush=1s;"
+  }
+ ],
+ "scenarios": [
+  {
+   "name": "proxy, typical browser headers",
+   "path": "/api/v1/items?id=42&sort=desc",
+   "headers": [
+    "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language: ru-RU,ru;q=0.9,en;q=0.8",
+    "Accept-Encoding: gzip, deflate, br, zstd",
+    "Referer: https://shop.example.com/catalog/phones?utm_source=newsletter&utm_medium=email&utm_campaign=autumn_sale_2026",
+    "Cookie: session=8f14e45fceea167a5a36dedd4bea2543; _ga=GA1.2.123456789.1700000000; _ym_uid=1700000000123456789; pref=dark"
+   ]
+  },
+  {
+   "name": "direct, long query + JWT + browser headers",
+   "path": "/direct?utm_source=google&utm_medium=cpc&utm_campaign=brand_search_ru&utm_content=ad_variant_b&utm_term=buy+phone&gclid=Cj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjwCj0KCQjw&yclid=1234567890123456789",
+   "headers": [
+    "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language: ru-RU,ru;q=0.9,en;q=0.8",
+    "Accept-Encoding: gzip, deflate, br, zstd",
+    "Referer: https://shop.example.com/catalog/phones?utm_source=newsletter&utm_medium=email&utm_campaign=autumn_sale_2026",
+    "Cookie: session=8f14e45fceea167a5a36dedd4bea2543; _ga=GA1.2.123456789.1700000000; _ym_uid=1700000000123456789; pref=dark",
+    "Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQeyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQeyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQeyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQeyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQeyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQeyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQeyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+   ]
+  },
+  {
+   "name": "direct, Host only",
+   "path": "/direct",
+   "headers": []
+  }
+ ]
+}

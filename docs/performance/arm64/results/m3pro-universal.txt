@@ -1,0 +1,17 @@
+
+## proxy, typical browser headers
+base default (-O)            cpu/req  11.70 us   rps    83235
+base -O2                     cpu/req  11.75 us   rps    82207   cpu Δ  -0.7% [-5.1,+35.6]   rps Δ  +1.3%
+candidate default (-O2+SIMD) cpu/req  11.75 us   rps    81370   cpu Δ  -3.9% [-10.3,+35.2]   rps Δ  +4.7%
+
+## direct, long query + JWT + browser headers
+base default (-O)            cpu/req   7.69 us   rps   126169
+base -O2                     cpu/req   7.36 us   rps   131836   cpu Δ  -5.4% [-7.4,+14.8]   rps Δ  +5.6%
+candidate default (-O2+SIMD) cpu/req   5.78 us   rps   167272   cpu Δ -25.1% [-32.9,-17.1]   rps Δ +33.2%
+
+## direct, Host only
+base default (-O)            cpu/req   4.67 us   rps   201183
+base -O2                     cpu/req   4.66 us   rps   200671   cpu Δ  -0.8% [-14.0,+2.6]   rps Δ  +0.1%
+candidate default (-O2+SIMD) cpu/req   4.62 us   rps   201398   cpu Δ  -2.1% [-30.8,+1.2]   rps Δ  +1.5%
+
+[exited with code 0]
