@@ -26,7 +26,7 @@ prefix=r'''
 typedef uintptr_t ngx_uint_t;
 typedef struct {ngx_uint_t number,total_weight; unsigned weighted:1;} ngx_http_upstream_rr_peers_t;
 typedef struct {ngx_uint_t range;} range_t;
-typedef struct {range_t ranges[1024];} conf_t;
+typedef struct {range_t ranges[1024]; int unit_weights;} conf_t;
 typedef struct {conf_t *conf;} ngx_http_upstream_random_peer_data_t;
 static ngx_uint_t random_input;
 static uint64_t comparisons, outputs;
@@ -35,10 +35,12 @@ static uint64_t comparisons, outputs;
 main=r'''
 static void check(unsigned n,unsigned mode,int exhaustive) {
     static conf_t conf; ngx_http_upstream_rr_peers_t peers={n,0,0};
+    conf.unit_weights=1;
     ngx_http_upstream_random_peer_data_t rp={&conf};
     for (unsigned j=0; j<n; j++){
         unsigned w=exhaustive ? 1+mode%3 : 1;
         if(exhaustive)mode/=3;
+        if(w!=1)conf.unit_weights=0;
         conf.ranges[j].range=peers.total_weight;
         peers.total_weight+=w;
     }
@@ -56,6 +58,19 @@ static void check(unsigned n,unsigned mode,int exhaustive) {
     if(!exhaustive)printf("unit weights n=%u mean comparisons original=%.1f candidate=%.1f\n",n,(double)orig/n,(double)prop/n);
 }
 int main(void){
+    /* Three positive weights can add up to three after unsigned wraparound. */
+    ngx_uint_t weights[] = {INTPTR_MAX, INTPTR_MAX, 5};
+    ngx_http_upstream_rr_peers_t peers={3,0,0};
+    conf_t conf={.unit_weights=1};
+    ngx_http_upstream_random_peer_data_t rp={&conf};
+    for(unsigned j=0;j<3;j++) {
+        conf.ranges[j].range=peers.total_weight;
+        peers.total_weight+=weights[j];
+        if(weights[j]!=1)conf.unit_weights=0;
+    }
+    peers.weighted=(peers.number!=peers.total_weight);
+    for(random_input=0;random_input<peers.total_weight;random_input++)
+        assert(ngx_http_upstream_peek_random_peer(&peers,&rp)==proposed(&peers,&rp));
     unsigned configs=0;
     for(unsigned n=1,p=3;n<=8;n++,p*=3)
         for(unsigned mode=0;mode<p;mode++){check(n,mode,1);configs++;}
