@@ -46,7 +46,7 @@
    ]
   },
   {
-   "name": "direct, Host only",
+   "name": "direct, ApacheBench default headers",
    "path": "/direct",
    "headers": []
   }
