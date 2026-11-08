@@ -47,14 +47,22 @@ jobs:
       - name: Install NGINX build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends libpcre2-dev libssl-dev zlib1g-dev
+          sudo apt-get install -y --no-install-recommends libpcre2-dev libssl-dev zlib1g-dev libfcgi-perl
       - name: Build baseline and candidate with the same options
         run: |
           for dir in .perf-base .; do
-            (cd "$dir" && auto/configure --with-http_ssl_module --with-http_v2_module --with-cc-opt=-O2 && make -j2)
+            (cd "$dir" && auto/configure --with-http_ssl_module --with-http_v2_module --with-stream --with-threads --with-cc-opt=-O2 && make -j2)
           done
       - name: Run official HTTP and upstream tests
         run: bash docs/performance/check.sh .perf-tests "$PWD/objs/nginx"
+      - name: Check UNIX sockets, upstream DNS reload and tunnel timeouts
+        working-directory: .perf-tests
+        env:
+          TEST_NGINX_BINARY: ${{ github.workspace }}/objs/nginx
+          TEST_NGINX_UNSAFE: '1'
+        run: |
+          prove -v -j1 geo_unix.t fastcgi_unix.t proxy_unix.t stream_geo_unix.t stream_unix.t \
+            upstream_resolve.t upstream_resolve_reload.t tunnel_next_upstream.t
       - name: Exercise the native parser and upstream selector
         run: |
           python docs/performance/parser/prepare.py .perf-base .
