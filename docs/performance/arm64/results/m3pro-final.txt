@@ -1,0 +1,19 @@
+## proxy, typical browser headers
+original, default build (-O) cpu/req  11.33 us   rps    86305
+original, -O2 (as packages)  cpu/req  11.76 us   rps    81744   cpu Δ  +1.6% [-1.8,+6.1]   rps Δ  -1.8%
+fork, default build          cpu/req  11.12 us   rps    86811   cpu Δ  -3.8% [-12.9,+18.9]   rps Δ  +3.7%
+
+## proxy, 2 KiB cookie
+original, default build (-O) cpu/req  13.61 us   rps    72066
+original, -O2 (as packages)  cpu/req  13.85 us   rps    70655   cpu Δ  +2.7% [-4.8,+12.0]   rps Δ  -2.7%
+fork, default build          cpu/req  11.70 us   rps    83466   cpu Δ -13.6% [-16.2,-10.7]   rps Δ +16.0%
+
+## direct, long query + JWT + browser headers
+original, default build (-O) cpu/req   7.60 us   rps   126511
+original, -O2 (as packages)  cpu/req   7.49 us   rps   128445   cpu Δ  -2.4% [-35.1,+1.5]   rps Δ  +2.6%
+fork, default build          cpu/req   5.88 us   rps   160270   cpu Δ -24.0% [-46.5,-19.0]   rps Δ +30.8%
+
+## direct, Host only
+original, default build (-O) cpu/req   4.76 us   rps   195328
+original, -O2 (as packages)  cpu/req   4.94 us   rps   177971   cpu Δ  +3.2% [-2.7,+6.4]   rps Δ  -4.0%
+fork, default build          cpu/req   4.91 us   rps   187277   cpu Δ  -0.9% [-4.8,+6.8]   rps Δ  +0.7%
